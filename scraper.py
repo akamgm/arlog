@@ -3,7 +3,7 @@ import json
 import logging
 from pathlib import Path
 
-from playwright.sync_api import BrowserContext, Page, sync_playwright
+from playwright.sync_api import Page, sync_playwright
 from playwright.sync_api import TimeoutError as PwTimeout
 
 import config
@@ -216,7 +216,9 @@ def _scrape_feed_via_dom(page: Page) -> list[dict]:
 
     parsed = []
     for item in events:
-        lines = [l.strip() for l in item.get("text", "").split("\n") if l.strip()]
+        lines = [
+            line.strip() for line in item.get("text", "").split("\n") if line.strip()
+        ]
         parsed.append(
             {
                 "arlo_event_id": item.get("id", ""),
@@ -233,7 +235,6 @@ def _scrape_feed_via_dom(page: Page) -> list[dict]:
 def scrape_feed() -> list[dict]:
     """Main entry point: scrape the Arlo feed and return parsed events."""
     state_dir = _ensure_state_dir()
-    state_path = state_dir / "state.json"
 
     with sync_playwright() as p:
         context = p.chromium.launch_persistent_context(

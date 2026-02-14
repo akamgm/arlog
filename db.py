@@ -1,6 +1,5 @@
 import json
 import sqlite3
-from datetime import datetime, timezone
 
 
 def init_db(db_path: str) -> sqlite3.Connection:
