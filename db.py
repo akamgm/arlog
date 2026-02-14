@@ -23,6 +23,16 @@ def init_db(db_path: str) -> sqlite3.Connection:
     conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_events_device ON events(device_name)
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS poll_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            polled_at TEXT NOT NULL DEFAULT (datetime('now')),
+            events_total INTEGER NOT NULL DEFAULT 0,
+            events_new INTEGER NOT NULL DEFAULT 0,
+            success INTEGER NOT NULL DEFAULT 1,
+            error TEXT
+        )
+    """)
     conn.commit()
     return conn
 
@@ -51,3 +61,18 @@ def insert_events(conn: sqlite3.Connection, events: list[dict]) -> int:
             pass  # duplicate, skip
     conn.commit()
     return inserted
+
+
+def log_poll(
+    conn: sqlite3.Connection,
+    events_total: int,
+    events_new: int,
+    success: bool = True,
+    error: str | None = None,
+):
+    """Record a poll cycle in the poll_log table."""
+    conn.execute(
+        "INSERT INTO poll_log (events_total, events_new, success, error) VALUES (?, ?, ?, ?)",
+        (events_total, events_new, 1 if success else 0, error),
+    )
+    conn.commit()

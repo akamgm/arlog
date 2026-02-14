@@ -38,9 +38,12 @@ def poll_once(conn):
             inserted = db.insert_events(conn, events)
             log.info(f"Poll complete: {inserted} new events (of {len(events)} total)")
         else:
+            inserted = 0
             log.info("Poll complete: no events returned")
-    except Exception:
+        db.log_poll(conn, events_total=len(events), events_new=inserted)
+    except Exception as exc:
         log.exception("Error during poll cycle")
+        db.log_poll(conn, events_total=0, events_new=0, success=False, error=str(exc))
 
 
 def main():
