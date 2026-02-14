@@ -127,33 +127,16 @@ def _login(page: Page) -> bool:
             return False
 
 
-def _goto_with_retry(page: Page, url: str, retries: int = 3, timeout: int = 60000):
-    """Navigate to a URL with retries on timeout."""
-    for attempt in range(1, retries + 1):
-        try:
-            page.goto(url, wait_until="networkidle", timeout=timeout)
-            return
-        except PwTimeout:
-            if attempt < retries:
-                log.warning(
-                    "Navigation to %s timed out (attempt %d/%d), retrying...",
-                    url,
-                    attempt,
-                    retries,
-                )
-                page.wait_for_timeout(2000)
-            else:
-                raise
-
-
 def _scrape_feed_via_network(page: Page) -> list[dict]:
     """Navigate to feed and capture API responses via network interception."""
     captured_events = []
+    feed_api_seen = []
 
     def handle_response(response):
         try:
             if not _is_feed_api_response(response.url):
                 return
+            feed_api_seen.append(response.url)
             if response.status != 200:
                 return
             content_type = response.headers.get("content-type", "")
@@ -182,7 +165,25 @@ def _scrape_feed_via_network(page: Page) -> list[dict]:
     page.on("response", handle_response)
 
     log.info("Navigating to feed...")
-    _goto_with_retry(page, ARLO_FEED_URL)
+    # Use domcontentloaded instead of networkidle — the Arlo SPA may keep
+    # background requests open (long-polling, websockets) that prevent
+    # networkidle from ever being reached, especially when feedcount is 0.
+    page.goto(ARLO_FEED_URL, wait_until="domcontentloaded", timeout=60000)
+
+    # Wait for a feed API response to arrive (up to 30s), or proceed if none comes
+    for _ in range(30):
+        if feed_api_seen:
+            break
+        page.wait_for_timeout(1000)
+    else:
+        log.warning("No feed API response seen after 30s")
+
+    if feed_api_seen:
+        log.info(
+            "Feed API responded (%d request(s)), captured %d event(s)",
+            len(feed_api_seen),
+            len(captured_events),
+        )
 
     # Scroll down to trigger loading more events
     for _ in range(3):
@@ -196,7 +197,7 @@ def _scrape_feed_via_network(page: Page) -> list[dict]:
 def _scrape_feed_via_dom(page: Page) -> list[dict]:
     """Fallback: scrape feed events from the DOM."""
     log.info("Attempting DOM-based feed scraping as fallback...")
-    _goto_with_retry(page, ARLO_FEED_URL)
+    page.goto(ARLO_FEED_URL, wait_until="domcontentloaded", timeout=60000)
     page.wait_for_timeout(5000)
 
     events = page.evaluate("""
@@ -246,7 +247,7 @@ def scrape_feed() -> list[dict]:
 
         # Try navigating directly to feed (might work if session is saved)
         try:
-            page.goto(ARLO_FEED_URL, wait_until="networkidle", timeout=60000)
+            page.goto(ARLO_FEED_URL, wait_until="domcontentloaded", timeout=60000)
         except PwTimeout:
             log.warning(
                 "Initial feed navigation timed out, checking if login needed..."
