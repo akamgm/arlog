@@ -38,10 +38,8 @@ def poll_once(conn):
         if events:
             inserted, new_events = db.insert_events(conn, events)
             log.info(f"Poll complete: {inserted} new events (of {len(events)} total)")
-            if new_events:
-                sent = notify.send(new_events)
-                if sent:
-                    log.info(f"Sent {sent} notification(s)")
+            if new_events and notify.send(new_events):
+                log.info("Sent notification")
         else:
             inserted = 0
             log.info("Poll complete: no events returned")
