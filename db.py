@@ -37,9 +37,12 @@ def init_db(db_path: str) -> sqlite3.Connection:
     return conn
 
 
-def insert_events(conn: sqlite3.Connection, events: list[dict]) -> int:
-    """Insert events, skipping duplicates. Returns count of newly inserted events."""
+def insert_events(
+    conn: sqlite3.Connection, events: list[dict]
+) -> tuple[int, list[dict]]:
+    """Insert events, skipping duplicates. Returns (count, list) of newly inserted events."""
     inserted = 0
+    new_events = []
     for event in events:
         try:
             conn.execute(
@@ -57,10 +60,11 @@ def insert_events(conn: sqlite3.Connection, events: list[dict]) -> int:
                 ),
             )
             inserted += 1
+            new_events.append(event)
         except sqlite3.IntegrityError:
             pass  # duplicate, skip
     conn.commit()
-    return inserted
+    return inserted, new_events
 
 
 def log_poll(

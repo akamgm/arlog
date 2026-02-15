@@ -12,6 +12,7 @@ import time
 
 import config
 import db
+import notify
 import scraper
 
 logging.basicConfig(
@@ -35,8 +36,12 @@ def poll_once(conn):
     try:
         events = scraper.scrape_feed()
         if events:
-            inserted = db.insert_events(conn, events)
+            inserted, new_events = db.insert_events(conn, events)
             log.info(f"Poll complete: {inserted} new events (of {len(events)} total)")
+            if new_events:
+                sent = notify.send(new_events)
+                if sent:
+                    log.info(f"Sent {sent} notification(s)")
         else:
             inserted = 0
             log.info("Poll complete: no events returned")
@@ -53,6 +58,7 @@ def main():
     log.info(f"  Poll interval: {config.POLL_INTERVAL}s")
     log.info(f"  Database: {config.DB_PATH}")
     log.info(f"  Headless: {config.HEADLESS}")
+    log.info(f"  Notifications: {'enabled' if config.NTFY_TOPIC else 'disabled'}")
 
     if not config.ARLO_EMAIL or not config.ARLO_PASSWORD:
         log.error("Set ARLOG_ARLO_EMAIL and ARLOG_ARLO_PASSWORD in .env or environment")
